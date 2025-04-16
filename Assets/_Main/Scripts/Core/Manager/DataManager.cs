@@ -31,7 +31,7 @@ public class DataManager : Singleton<DataManager>
     {
         if (Energy > MinEnergy)
         {
-            Energy--;
+            //Energy--;
             SceneManager.LoadScene(sceneName);
         }
         else

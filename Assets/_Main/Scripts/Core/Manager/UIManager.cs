@@ -22,10 +22,6 @@ public class UIManager : Singleton<UIManager>
     private WinPanel winPanel;
     [SerializeField]
     private LosePanel losePanel;
-    [SerializeField]
-    private OutOfEnergyPanel outOfEnergyPanel;
-    [SerializeField]
-    private ShopPanel shopPanel;
 
     private void HideLaser()
     {
@@ -51,7 +47,6 @@ public class UIManager : Singleton<UIManager>
     private void Update()
     {
         if (OVRInput.GetDown(OVRInput.Button.Three)&& Time.timeScale!=0)
-        /*if (Input.GetKeyDown(KeyCode.A)&& Time.timeScale!=0)*/
         {
             if(pausePanel.gameObject.activeSelf)
                 return;
@@ -85,12 +80,6 @@ public class UIManager : Singleton<UIManager>
             case Panel.LosePanel:
                 losePanel.Open(Constants.DurationOpenPanel);
                 break;
-            case Panel.OutOfEnergyPanel:
-                outOfEnergyPanel.Open(Constants.DurationOpenPanel);
-                break;
-            case Panel.ShopPanel:
-                shopPanel.Open(Constants.DurationOpenPanel);
-                break;
         }
     }
     
@@ -107,12 +96,6 @@ public class UIManager : Singleton<UIManager>
                 break;
             case Panel.LosePanel:
                 losePanel.Close(Constants.DurationClosePanel);
-                break;
-            case Panel.OutOfEnergyPanel:
-                outOfEnergyPanel.Close(Constants.DurationClosePanel);
-                break;
-            case Panel.ShopPanel:
-                shopPanel.Close(Constants.DurationClosePanel);
                 break;
         }
     }

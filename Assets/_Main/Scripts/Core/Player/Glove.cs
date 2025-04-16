@@ -22,7 +22,7 @@ public class Glove : Node
                     if (ball.ballColor == gloveColor)
                     {
                         // Đấm đúng màu
-                        GameManager.Instance.AddScore(50, ball.transform);
+                        GameManager.Instance.AddScore(10, ball.transform);
                         if (!GameManager.Instance.comboActive)
                         {
                             vfxBallExplosion= ObjectPutter.Instance.PutObject(SpawnerType.VFXRealBallExplosion);

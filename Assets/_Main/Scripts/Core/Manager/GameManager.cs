@@ -21,27 +21,9 @@ public class GameManager : Singleton<GameManager>
         {
             _score = value;
             OnScoreChanged?.Invoke(_score);
-            if (_score >= scoreTarget)
-            {
-                //todo win
-                if(CurrentGameState!=GameState.Playing)
-                {
-                    return;
-                }
-                Sequence(Delay(0.5).OnComplete(OnGameWin));
-            }else if (_score < 0)
-            {
-                //todo lose
-                if(CurrentGameState!=GameState.Playing)
-                {
-                    return;
-                }
-                Sequence(Delay(0.5).OnComplete(OnGameLose));
-            }
         }
         get => _score;
     }
-    public int scoreTarget = 500;
 
     [Header("Combo Settings")]
     // Cần 5 đấm liên tục để kích hoạt combo
@@ -54,7 +36,8 @@ public class GameManager : Singleton<GameManager>
     private Transform spawnPointLeft;
     [SerializeField]
     private Transform spawnPointRight;
-    public int totalTime = 30;
+    public int totalTime = 60;
+    int timePlay = 0;
     public float speedBallBase = 30f;
     /*[SerializeField] 
     private float intervalSpawn;*/
@@ -63,12 +46,14 @@ public class GameManager : Singleton<GameManager>
     
     private float _baseMinSpawnDelay;
     private float _baseMaxSpawnDelay;
+    private int maxMissedHit = 10;
 
     private float _currentBallSpeed = 10f;
     
     
     public Action OnGameStarting;
     public Action OnGameEnding;
+    public Action OnMissedHit;
     public Action<int> OnTimeChanged;
     public Action<int> OnScoreChanged;
     private int _currentLevel=1;
@@ -143,7 +128,9 @@ public class GameManager : Singleton<GameManager>
 
     private void Start()
     {
+        OnMissedHit += MissedHit;
         CurrentGameState = GameState.Playing;
+
         /*intervalSpawn = levelTime / _currentBallSpeed;*/
 
     }
@@ -163,11 +150,13 @@ public class GameManager : Singleton<GameManager>
 
     private void ResetData()
     {
-        totalTime = 30;
+        totalTime = 60;
+        timePlay = 0;
         CurrentTime = totalTime;
         Score = 0;
         comboActive = false;
         consecutiveHits = 0;
+        missedHit = 0;
         if (CurrentLevel == 1)
         {
             _currentBallSpeed = speedBallBase;
@@ -177,7 +166,6 @@ public class GameManager : Singleton<GameManager>
         else
         {
             //cấp số nhân
-            _currentBallSpeed = speedBallBase * Mathf.Pow(10f, CurrentLevel - 1);
             minSpawnDelay = _baseMinSpawnDelay * Mathf.Pow(0.05f, CurrentLevel - 1);
             maxSpawnDelay = _baseMaxSpawnDelay * Mathf.Pow(0.05f, CurrentLevel - 1);
             //tuyến tính
@@ -242,6 +230,15 @@ public class GameManager : Singleton<GameManager>
 
         //UpdateUI();
     }
+        int missedHit = 0;
+    private void MissedHit()
+    {
+        missedHit++;
+        if(missedHit > maxMissedHit)
+        {
+            OnGameLose();
+        }
+    }
     
     public void AddScore(int amount)
     {
@@ -268,7 +265,10 @@ public class GameManager : Singleton<GameManager>
             consecutiveHits = 0;
             comboActive = false;
         }
-
+        if(_score <= 0)
+        {
+            _score = 0;
+        }
         //UpdateUI();
     }
     
@@ -287,7 +287,16 @@ public class GameManager : Singleton<GameManager>
             yield return wait;
             if (Mathf.Approximately(Time.timeScale, 1f))
             {
-                CurrentTime--;
+                timePlay++;
+                if(timePlay >= 20)
+                {
+                    _currentBallSpeed *= 1.2f;
+                }
+                else if (timePlay >= 40)
+                {
+                    _currentBallSpeed *= 1.2f;
+                }
+                    CurrentTime--;
             }
             if (CurrentTime <= 0 && CurrentGameState == GameState.Playing)
             {
@@ -297,28 +306,6 @@ public class GameManager : Singleton<GameManager>
 
         
     }
-   
-    void EndLevel()
-    {
-        if (Score >= scoreTarget)
-        {
-            Debug.Log("Level Passed!");
-        }
-        else
-        {
-            Debug.Log("Level Failed!");
-        }
-        /*ResetLevel();*/
-    }
-    void ResetLevel()
-    {
-        //timer = levelTime;
-        Score = 0;
-        comboActive = false;
-        consecutiveHits = 0;
-        //UpdateUI();
-    }
-
     #endregion
 
     #region Spawn Level
@@ -383,9 +370,11 @@ public class GameManager : Singleton<GameManager>
             _rightSpawnCoroutine = null;
         }
     }
-    
+
     IEnumerator SpawnBallAt(Transform spawnPoint)
     {
+        MoveSpawnPoint moveSpawnPoint = GetComponent<MoveSpawnPoint>();
+
         while (CurrentGameState == GameState.Playing)
         {
             // Sinh bóng tại spawnPoint
@@ -400,12 +389,46 @@ public class GameManager : Singleton<GameManager>
                     ballComponent.ActiveForce(_currentBallSpeed);
                 }
             }
+
+            // Đổi vị trí spawn sau khi spawn bóng
+            ChangePosition();
+
             // Đợi một khoảng thời gian ngẫu nhiên trước khi spawn bóng tiếp theo
             float delay = Random.Range(minSpawnDelay, maxSpawnDelay);
             yield return new WaitForSeconds(delay);
         }
     }
-    
+    [SerializeField] List<Transform> pos;
+
+
+    void ChangePosition()
+    {
+        HashSet<Transform> usedPositions = new HashSet<Transform>();
+
+        if (pos.Count > 0)
+        {
+            Transform leftPosition;
+            do
+            {
+                leftPosition = pos[UnityEngine.Random.Range(0, pos.Count)];
+            } while (usedPositions.Contains(leftPosition));
+
+            spawnPointLeft = leftPosition;
+            usedPositions.Add(leftPosition);
+        }
+
+        if (pos.Count > 0)
+        {
+            Transform rightPosition;
+            do
+            {
+                rightPosition = pos[UnityEngine.Random.Range(0, pos.Count)];
+            } while (usedPositions.Contains(rightPosition));
+
+            spawnPointRight = rightPosition;
+            usedPositions.Add(rightPosition);
+        }
+    }
     /*IEnumerator SpawnBall()
     {
         while (CurrentGameState== GameState.Playing)

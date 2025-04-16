@@ -33,6 +33,7 @@ public class Ball : Node
 
     public void ActiveForce(float speed)
     {
+        
         _rb.linearVelocity = transform.forward * (speed * _forceScale);
     }
 
@@ -52,6 +53,7 @@ public class Ball : Node
         {
             if (ballColor is BallColor.Red or BallColor.Yellow)
             {
+                GameManager.Instance.OnMissedHit?.Invoke();
                 SoundManager.Instance.PlaySound(Sound.FakeBallExplosion, transform.position);
                 GameManager.Instance.AddScore(-20);
             }
