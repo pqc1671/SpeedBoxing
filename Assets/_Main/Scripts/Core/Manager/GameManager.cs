@@ -20,7 +20,6 @@ public class GameManager : Singleton<GameManager>
         set
         {
             _score = value;
-            OnScoreChanged?.Invoke(_score);
         }
         get => _score;
     }
@@ -157,6 +156,8 @@ public class GameManager : Singleton<GameManager>
         comboActive = false;
         consecutiveHits = 0;
         missedHit = 0;
+        speedafter20s = false;
+        speedafter40s = false;
         if (CurrentLevel == 1)
         {
             _currentBallSpeed = speedBallBase;
@@ -249,7 +250,11 @@ public class GameManager : Singleton<GameManager>
         }
 
         Score += amount;
-
+        if(Score <= 0)
+        {
+            Score = 0;
+        }
+        OnScoreChanged?.Invoke(_score);
         // Xử lý combo
         if (amount > 0)
         {
@@ -265,13 +270,9 @@ public class GameManager : Singleton<GameManager>
             consecutiveHits = 0;
             comboActive = false;
         }
-        if(_score <= 0)
-        {
-            _score = 0;
-        }
         //UpdateUI();
     }
-    
+
     /*private void OnGameOverTime()
     {
         SoundManager.Instance.PlaySound(Sound.Lose, transform.position);
@@ -279,8 +280,12 @@ public class GameManager : Singleton<GameManager>
         UIManager.Instance.Show(UIManager.Panel.GameOverTimePanel);
         /*Debug.Log("lose me m roi");#1#
     }*/
+    bool speedafter20s = false;
+    bool speedafter40s = false;
     private IEnumerator TimeCountDown()
     {
+
+
         WaitForSecondsRealtime wait = new WaitForSecondsRealtime(1f);
         while (CurrentTime > 0)
         {
@@ -288,23 +293,24 @@ public class GameManager : Singleton<GameManager>
             if (Mathf.Approximately(Time.timeScale, 1f))
             {
                 timePlay++;
-                if(timePlay >= 20)
+                if(timePlay >= 20 && !speedafter20s)
                 {
                     _currentBallSpeed *= 1.2f;
+                    speedafter20s = true;
                 }
-                else if (timePlay >= 40)
+                else if (timePlay >= 40 && !speedafter40s)
                 {
                     _currentBallSpeed *= 1.2f;
+                    speedafter40s = true;
                 }
                     CurrentTime--;
             }
-            if (CurrentTime <= 0 && CurrentGameState == GameState.Playing)
+            if(CurrentTime <= 0)
             {
-                Sequence(Delay(0.5).OnComplete(OnGameLose));
+                CurrentGameState = GameState.Ending;
+                OnGameWin();
             }
         }
-
-        
     }
     #endregion
 
@@ -340,14 +346,14 @@ public class GameManager : Singleton<GameManager>
         }
         _spawnBallCoroutine = StartCoroutine(SpawnBall());
     }*/
-    
+
     private void StartSpawnBall()
     {
         // Khởi chạy 2 coroutine độc lập cho 2 spawn point
-        _leftSpawnCoroutine = StartCoroutine(SpawnBallAt(spawnPointLeft));
-        _rightSpawnCoroutine = StartCoroutine(SpawnBallAt(spawnPointRight));
+        _leftSpawnCoroutine = StartCoroutine(SpawnBallAt(true));  // true: spawnPointLeft
+        _rightSpawnCoroutine = StartCoroutine(SpawnBallAt(false)); // false: spawnPointRight
     }
-    
+
     /*public void StopSpawnBall()
     {
         if (_spawnBallCoroutine != null)
@@ -356,7 +362,7 @@ public class GameManager : Singleton<GameManager>
             _spawnBallCoroutine = null;
         }
     }*/
-    
+
     public void StopSpawnBall()
     {
         if (_leftSpawnCoroutine != null)
@@ -371,12 +377,13 @@ public class GameManager : Singleton<GameManager>
         }
     }
 
-    IEnumerator SpawnBallAt(Transform spawnPoint)
+    IEnumerator SpawnBallAt(bool isLeft)
     {
-        MoveSpawnPoint moveSpawnPoint = GetComponent<MoveSpawnPoint>();
-
         while (CurrentGameState == GameState.Playing)
         {
+            // Lấy điểm spawn hiện tại
+            Transform spawnPoint = isLeft ? spawnPointLeft : spawnPointRight;
+
             // Sinh bóng tại spawnPoint
             var randomType = GetRandomBallType();
             Transform ball = ObjectPutter.Instance.PutObject(randomType);
