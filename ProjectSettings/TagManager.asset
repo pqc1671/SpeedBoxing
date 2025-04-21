@@ -8,6 +8,7 @@ TagManager:
   - Ball
   - CheckArea
   - SpawnSphere
+  - ChangeColor
   layers:
   - Default
   - TransparentFX
@@ -20,7 +21,7 @@ TagManager:
   - Ball
   - CheckArea
   - Glove
-  - 
+  - ChangeColor
   - 
   - 
   - 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using DG.Tweening;
@@ -17,46 +17,42 @@ public class GameManager : Singleton<GameManager>
 
     public int Score
     {
-        set
-        {
-            _score = value;
-        }
+        set => _score = Mathf.Max(0, value);
         get => _score;
     }
 
     [Header("Combo Settings")]
-    // Cần 5 đấm liên tục để kích hoạt combo
-    public int comboRequirement = 5;  
+    public int comboRequirement = 5;
     public bool comboActive = false;
     public int consecutiveHits = 0;
-    
+
     [Header("Spawn Settings")]
-    [SerializeField]
-    private Transform spawnPointLeft;
-    [SerializeField]
-    private Transform spawnPointRight;
-    public int totalTime = 60;
-    int timePlay = 0;
-    public float speedBallBase = 30f;
-    /*[SerializeField] 
-    private float intervalSpawn;*/
+    [SerializeField] private Transform spawnPointLeft;
+    [SerializeField] private Transform spawnPointRight;
     [SerializeField] private float minSpawnDelay = 0.5f;
     [SerializeField] private float maxSpawnDelay = 1.5f;
-    
+    public float speedBallBase = 30f;
+
+    [SerializeField] private List<Transform> pos;
+
     private float _baseMinSpawnDelay;
     private float _baseMaxSpawnDelay;
-    private int maxMissedHit = 10;
-
+    private int _currentLevel = 1;
     private float _currentBallSpeed = 10f;
-    
-    
+    private int timePlay = 0;
+    private int missedHit = 0;
+    private const int maxMissedHit = 10;
+
+    private Coroutine _leftSpawnCoroutine;
+    private Coroutine _rightSpawnCoroutine;
+
+    private GameState _currentGameState;
+
     public Action OnGameStarting;
     public Action OnGameEnding;
     public Action OnMissedHit;
-    public Action<int> OnTimeChanged;
     public Action<int> OnScoreChanged;
-    private int _currentLevel=1;
-
+    public Action<int> OnMissedChanged;
 
     private List<SpawnerType> BallSpawnerTypeList = new List<SpawnerType>()
     {
@@ -66,12 +62,34 @@ public class GameManager : Singleton<GameManager>
         SpawnerType.GreyBall,
         SpawnerType.OrangeBall
     };
+
+    private List<SpawnerType> originalBallList;
+
+    private List<SpawnerType> AdvanceBallList = new List<SpawnerType>()
+    {
+        SpawnerType.RedBall1,
+        SpawnerType.YellowBall1,
+        SpawnerType.WhiteBall1,
+        SpawnerType.GreyBall1,
+        SpawnerType.OrangeBall1
+    };
+
     public int CurrentLevel
     {
         get => _currentLevel;
-        set => _currentLevel = Mathf.Clamp(value, 1, _currentLevel);
+        set
+        {
+            int newLevel = (value - 1) % 3 + 1;
+            if (value > 1 && newLevel == 1)
+            {
+                speedBallBase *= 1.3f;
+                Debug.Log($"Quay về Level 1 - tăng speed bóng lên: {speedBallBase}");
+            }
+
+            _currentLevel = newLevel;
+        }
     }
-    private GameState _currentGameState;
+
     public GameState CurrentGameState
     {
         get => _currentGameState;
@@ -84,107 +102,52 @@ public class GameManager : Singleton<GameManager>
                     OnGameStarting?.Invoke();
                     ResetData();
                     StartCoroutine(ReadyCountdown());
-                    /*BGSoundManager.Instance.PlayBackgroundSound();*/
-                    /*Time.timeScale = 1;*/
                     break;
                 case GameState.Ending:
                     OnGameEnding?.Invoke();
-                    /*Time.timeScale = 0;*/
                     BGSoundManager.Instance.StopBackgroundSound();
                     StopSpawnBall();
-                    /*Sequence(Delay(1.0).OnComplete(() =>
-                    {
-                        BGSoundManager.Instance.StopBackgroundSound();
-                    }));*/
                     break;
             }
         }
     }
-    
-    private int _currentTime;
 
-    public int CurrentTime
-    {
-        private set
-        {
-            _currentTime = value;
-            OnTimeChanged?.Invoke(_currentTime);
-        }
-        get => _currentTime;
-    }
-    
-    /*private Coroutine _spawnBallCoroutine;*/
-    
-    private Coroutine _leftSpawnCoroutine;
-    private Coroutine _rightSpawnCoroutine;
     protected override void Awake()
     {
         base.Awake();
-        /*DontDestroyOnLoad();*/
         _baseMinSpawnDelay = minSpawnDelay;
         _baseMaxSpawnDelay = maxSpawnDelay;
+        originalBallList = new List<SpawnerType>(BallSpawnerTypeList);
     }
 
     private void Start()
     {
         OnMissedHit += MissedHit;
         CurrentGameState = GameState.Playing;
-
-        /*intervalSpawn = levelTime / _currentBallSpeed;*/
-
     }
 
     private void OnDestroy()
     {
-        UnregisterEvents();
-    }
-    
-    private void UnregisterEvents()
-    {
         OnGameStarting = null;
         OnGameEnding = null;
-        OnTimeChanged = null;
         OnScoreChanged = null;
+        OnMissedChanged = null;
     }
 
     private void ResetData()
     {
-        totalTime = 60;
         timePlay = 0;
-        CurrentTime = totalTime;
         Score = 0;
         comboActive = false;
         consecutiveHits = 0;
         missedHit = 0;
-        speedafter20s = false;
-        speedafter40s = false;
+
         if (CurrentLevel == 1)
         {
             _currentBallSpeed = speedBallBase;
             minSpawnDelay = _baseMinSpawnDelay;
             maxSpawnDelay = _baseMaxSpawnDelay;
         }
-        else
-        {
-            //cấp số nhân
-            minSpawnDelay = _baseMinSpawnDelay * Mathf.Pow(0.05f, CurrentLevel - 1);
-            maxSpawnDelay = _baseMaxSpawnDelay * Mathf.Pow(0.05f, CurrentLevel - 1);
-            //tuyến tính
-            /*_currentBallSpeed = speedBallBase * (1 + 0.5f * (CurrentLevel - 1));*/
-            
-        }
-    }
-
-    #region WIN LOSE
-    
-    private void OnGameWin()
-    {
-        Debug.Log("Win");
-        SoundManager.Instance.PlaySound2D(Sound.Win);
-        Time.timeScale = 0;
-        CurrentGameState = GameState.Ending;
-        DataManager.Instance.Energy++;
-        UIManager.Instance.Show(UIManager.Panel.WinPanel);
     }
 
     private void OnGameLose()
@@ -195,173 +158,138 @@ public class GameManager : Singleton<GameManager>
         CurrentGameState = GameState.Ending;
         UIManager.Instance.Show(UIManager.Panel.LosePanel);
     }
-    #endregion
 
-    #region Logic and Events
-
-    public void AddScore(int amount, Transform ballTransform)
-    {
-        // Nếu comboActive và amount > 0 (đấm đúng) => nhân đôi
-        if (comboActive && amount > 0)
-        {
-            amount *= 2;
-            SoundManager.Instance.PlaySound(Sound.RealBallExplosion, ballTransform.position);
-            Transform vfxCombo = ObjectPutter.Instance.PutObject(SpawnerType.VFXCombo);
-            vfxCombo.position = ballTransform.position;
-            vfxCombo.rotation = ballTransform.rotation;
-        }
-
-        Score += amount;
-
-        // Xử lý combo
-        if (amount > 0)
-        {
-            consecutiveHits++;
-            if (consecutiveHits >= comboRequirement)
-            {
-                comboActive = true;
-            }
-        }
-        else
-        {
-            // Đấm sai => reset combo
-            consecutiveHits = 0;
-            comboActive = false;
-        }
-
-        //UpdateUI();
-    }
-        int missedHit = 0;
-    private void MissedHit()
-    {
-        missedHit++;
-        if(missedHit > maxMissedHit)
-        {
-            OnGameLose();
-        }
-    }
-    
-    public void AddScore(int amount)
-    {
-        // Nếu comboActive và amount > 0 (đấm đúng) => nhân đôi
-        if (comboActive && amount > 0)
-        {
-            amount *= 2;
-        }
-
-        Score += amount;
-        if(Score <= 0)
-        {
-            Score = 0;
-        }
-        OnScoreChanged?.Invoke(_score);
-        // Xử lý combo
-        if (amount > 0)
-        {
-            consecutiveHits++;
-            if (consecutiveHits >= comboRequirement)
-            {
-                comboActive = true;
-            }
-        }
-        else
-        {
-            // Đấm sai => reset combo
-            consecutiveHits = 0;
-            comboActive = false;
-        }
-        //UpdateUI();
-    }
-
-    /*private void OnGameOverTime()
-    {
-        SoundManager.Instance.PlaySound(Sound.Lose, transform.position);
-        Time.timeScale = 0;
-        UIManager.Instance.Show(UIManager.Panel.GameOverTimePanel);
-        /*Debug.Log("lose me m roi");#1#
-    }*/
-    bool speedafter20s = false;
-    bool speedafter40s = false;
     private IEnumerator TimeCountDown()
     {
-
-
         WaitForSecondsRealtime wait = new WaitForSecondsRealtime(1f);
-        while (CurrentTime > 0)
+        while (true)
         {
             yield return wait;
             if (Mathf.Approximately(Time.timeScale, 1f))
             {
                 timePlay++;
-                if(timePlay >= 20 && !speedafter20s)
+                if (timePlay >= 30)
                 {
-                    _currentBallSpeed *= 1.2f;
-                    speedafter20s = true;
+                    timePlay = 0;
+                    CurrentLevel++;
+                    ApplyLevelSettings();
                 }
-                else if (timePlay >= 40 && !speedafter40s)
-                {
-                    _currentBallSpeed *= 1.2f;
-                    speedafter40s = true;
-                }
-                    CurrentTime--;
-            }
-            if(CurrentTime <= 0)
-            {
-                CurrentGameState = GameState.Ending;
-                OnGameWin();
             }
         }
     }
-    #endregion
 
-    #region Spawn Level
+    private void ApplyLevelSettings()
+    {
+        switch (CurrentLevel)
+        {
+            case 1:
+                BallSpawnerTypeList = new List<SpawnerType>(originalBallList);
+                spawnPointLeft = pos[0];
+                spawnPointRight = pos[1];
+                break;
+
+            case 2:
+                Debug.Log("Level 2: thêm bóng nâng cao");
+                BallSpawnerTypeList = new List<SpawnerType>(originalBallList);
+                BallSpawnerTypeList.AddRange(AdvanceBallList);
+                break;
+
+            case 3:
+                Debug.Log("Level 3: spawn ngẫu nhiên toàn bộ điểm trong list");
+                if (pos.Count >= 2)
+                {
+                    spawnPointLeft = pos[Random.Range(0, pos.Count)];
+                    do
+                    {
+                        spawnPointRight = pos[Random.Range(0, pos.Count)];
+                    } while (spawnPointRight == spawnPointLeft);
+                }
+                break;
+        }
+    }
+
+    public void AddScore(int amount, Transform ballTransform)
+    {
+        if (comboActive && amount > 0)
+        {
+            amount *= 2;
+            SoundManager.Instance.PlaySound(Sound.RealBallExplosion, ballTransform.position);
+            var vfx = ObjectPutter.Instance.PutObject(SpawnerType.VFXCombo);
+            vfx.position = ballTransform.position;
+            vfx.rotation = ballTransform.rotation;
+        }
+
+        Score += amount;
+        OnScoreChanged?.Invoke(_score);
+
+        if (amount > 0)
+        {
+            consecutiveHits++;
+            if (consecutiveHits >= comboRequirement)
+                comboActive = true;
+        }
+        else
+        {
+            consecutiveHits = 0;
+            comboActive = false;
+        }
+    }
+
+    public void AddScore(int amount)
+    {
+        if (comboActive && amount > 0)
+            amount *= 2;
+
+        Score += amount;
+        OnScoreChanged?.Invoke(_score);
+
+        if (amount > 0)
+        {
+            consecutiveHits++;
+            if (consecutiveHits >= comboRequirement)
+                comboActive = true;
+        }
+        else
+        {
+            consecutiveHits = 0;
+            comboActive = false;
+        }
+    }
+
+    private void MissedHit()
+    {
+        missedHit++;
+        OnMissedChanged?.Invoke(missedHit);
+        if (missedHit > maxMissedHit)
+            OnGameLose();
+    }
 
     IEnumerator ReadyCountdown()
     {
         SoundManager.Instance.PlaySound2D(Sound.Ready);
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(1f);
         SoundManager.Instance.PlaySound2D(Sound.Countdown);
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(1f);
         SoundManager.Instance.PlaySound2D(Sound.Countdown);
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(1f);
         SoundManager.Instance.PlaySound2D(Sound.Countdown);
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(1f);
         SoundManager.Instance.PlaySound2D(Sound.Fight);
-        if(SoundManager.Instance.IsSoundOn)
-        {
+
+        if (SoundManager.Instance.IsSoundOn)
             BGSoundManager.Instance.PlayBackgroundSound();
-        }
         else
-        {
             BGSoundManager.Instance.StopBackgroundSound();
-        }
+
         StartCoroutine(TimeCountDown());
         StartSpawnBall();
     }
-    /*private void StartSpawnBall()
-    {
-        if (_spawnBallCoroutine != null)
-        {
-            StopCoroutine(_spawnBallCoroutine);
-        }
-        _spawnBallCoroutine = StartCoroutine(SpawnBall());
-    }*/
 
     private void StartSpawnBall()
     {
-        // Khởi chạy 2 coroutine độc lập cho 2 spawn point
-        _leftSpawnCoroutine = StartCoroutine(SpawnBallAt(true));  // true: spawnPointLeft
-        _rightSpawnCoroutine = StartCoroutine(SpawnBallAt(false)); // false: spawnPointRight
+        _leftSpawnCoroutine = StartCoroutine(SpawnBallAt(true));
+        _rightSpawnCoroutine = StartCoroutine(SpawnBallAt(false));
     }
-
-    /*public void StopSpawnBall()
-    {
-        if (_spawnBallCoroutine != null)
-        {
-            StopCoroutine(_spawnBallCoroutine);
-            _spawnBallCoroutine = null;
-        }
-    }*/
 
     public void StopSpawnBall()
     {
@@ -381,98 +309,51 @@ public class GameManager : Singleton<GameManager>
     {
         while (CurrentGameState == GameState.Playing)
         {
-            // Lấy điểm spawn hiện tại
-            Transform spawnPoint = isLeft ? spawnPointLeft : spawnPointRight;
+            Transform spawnPoint;
 
-            // Sinh bóng tại spawnPoint
+            if (CurrentLevel == 1)
+                spawnPoint = isLeft ? spawnPointLeft : spawnPointRight;
+            else if (CurrentLevel == 3)
+                spawnPoint = pos[Random.Range(0, pos.Count)];
+            else
+                spawnPoint = isLeft ? spawnPointLeft : spawnPointRight;
+
             var randomType = GetRandomBallType();
-            Transform ball = ObjectPutter.Instance.PutObject(randomType);
+            var ball = ObjectPutter.Instance.PutObject(randomType);
             if (ball)
             {
                 ball.position = spawnPoint.position;
                 ball.rotation = spawnPoint.rotation;
                 if (ball.TryGetComponent(out Ball ballComponent))
-                {
                     ballComponent.ActiveForce(_currentBallSpeed);
-                }
             }
 
-            // Đổi vị trí spawn sau khi spawn bóng
-            ChangePosition();
+            if (CurrentLevel == 3)
+                ChangePosition();
 
-            // Đợi một khoảng thời gian ngẫu nhiên trước khi spawn bóng tiếp theo
-            float delay = Random.Range(minSpawnDelay, maxSpawnDelay);
-            yield return new WaitForSeconds(delay);
+            yield return new WaitForSeconds(Random.Range(minSpawnDelay, maxSpawnDelay));
         }
     }
-    [SerializeField] List<Transform> pos;
-
 
     void ChangePosition()
     {
-        HashSet<Transform> usedPositions = new HashSet<Transform>();
+        HashSet<Transform> used = new HashSet<Transform>();
 
         if (pos.Count > 0)
         {
-            Transform leftPosition;
-            do
-            {
-                leftPosition = pos[UnityEngine.Random.Range(0, pos.Count)];
-            } while (usedPositions.Contains(leftPosition));
-
-            spawnPointLeft = leftPosition;
-            usedPositions.Add(leftPosition);
+            do { spawnPointLeft = pos[Random.Range(0, pos.Count)]; }
+            while (!used.Add(spawnPointLeft));
         }
 
         if (pos.Count > 0)
         {
-            Transform rightPosition;
-            do
-            {
-                rightPosition = pos[UnityEngine.Random.Range(0, pos.Count)];
-            } while (usedPositions.Contains(rightPosition));
-
-            spawnPointRight = rightPosition;
-            usedPositions.Add(rightPosition);
+            do { spawnPointRight = pos[Random.Range(0, pos.Count)]; }
+            while (!used.Add(spawnPointRight));
         }
     }
-    /*IEnumerator SpawnBall()
-    {
-        while (CurrentGameState== GameState.Playing)
-        {
-            var randomTypeLeft = GetRandomBallType();
-            Transform ballLeft = ObjectPutter.Instance.PutObject(randomTypeLeft);
-            if (ballLeft)
-            {
-                ballLeft.position = spawnPointLeft.position;
-                ballLeft.rotation = spawnPointLeft.rotation;
-                if (ballLeft.TryGetComponent(out Ball ballLeftComponent))
-                {
-                    ballLeftComponent.ActiveForce(_currentBallSpeed);
-                }
-            }
-
-            var randomTypeRight = GetRandomBallType();
-            Transform ballRight = ObjectPutter.Instance.PutObject(randomTypeRight);
-            if (ballRight)
-            {
-                ballRight.position = spawnPointRight.position;
-                ballRight.rotation = spawnPointRight.rotation;
-                if (ballRight.TryGetComponent(out Ball ballRightComponent))
-                {
-                    ballRightComponent.ActiveForce(_currentBallSpeed);
-                }
-            }
-
-            yield return new WaitForSeconds(intervalSpawn);
-        }
-    }*/
 
     SpawnerType GetRandomBallType()
     {
-        var randomIndex = Random.Range(0, BallSpawnerTypeList.Count);
-        return BallSpawnerTypeList[randomIndex];
+        return BallSpawnerTypeList[Random.Range(0, BallSpawnerTypeList.Count)];
     }
-    #endregion
-    
 }

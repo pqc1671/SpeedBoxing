@@ -35,6 +35,7 @@ public class Glove : Node
                     else
                     {
                         // Đấm sai màu
+                        GameManager.Instance.OnMissedHit?.Invoke();
                         GameManager.Instance.AddScore(-20, ball.transform);
                         vfxBallExplosion= ObjectPutter.Instance.PutObject(SpawnerType.VFXFakeBallExplosion);
                         vfxBallExplosion.position = ball.transform.position;
